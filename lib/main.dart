@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:barcode_image/barcode_image.dart';
@@ -22,21 +23,13 @@ class _MyAppState extends State<MyApp> {
   List<BluetoothDevice> _devices = [];
   BluetoothDevice? _device;
   bool _connected = false;
-  String pathImage = '';
-  String svgPath = '';
   bool _pressed = false;
-  String? dir;
-  String fileName = '';
+  late String dir;
 
   @override
   void initState() {
     super.initState();
     initPlatformState();
-    initSavetoPath();
-  }
-
-  initSavetoPath() async {
-    dir = (await getExternalStorageDirectory())?.path;
   }
 
   Future<void> initPlatformState() async {
@@ -44,7 +37,6 @@ class _MyAppState extends State<MyApp> {
     List<BluetoothDevice> devices = [];
     try {
       devices = await bluetooth.getBondedDevices();
-      print('[InitPlatformState] Devices: $devices');
     } on PlatformException {
       // TODO - Error
       print('[PlatformException] !!! error !!!');
@@ -241,28 +233,46 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _testPrint() async {
-    generateBarcodeImage(Barcode.code128(), 'BARCODE\t128', 200, 80)
+    var data = {
+      'village_name': 'TAŞPINAR',
+      'order_no': 420803,
+      'name_surname': 'ÖMERİL FARUK İNCE',
+      'weigher': '001:FABRİKA MERKEZ',
+      'date': '20201120',
+      'quantity': 25,
+      'machine': '41914310001'
+    };
+
+    generateBarcodeImage(Barcode.code128(), '*0200187454*', 200, 80)
         .then((bytes) {
-      print('###################### image bytes length');
-      print(bytes.length);
       bluetooth.isConnected.then((isConnected) {
         if (isConnected!) {
-          // bluetooth.printCustom("KONYA ŞEKER FAB.", 3, 1);
-          // bluetooth.printNewLine();
-          // bluetooth.printImage(pathImage);
-          // bluetooth.printLeftRight("LEFT", "RIGHT", 0);
-          // bluetooth.printLeftRight("LEFT", "RIGHT", 1);
-          // bluetooth.printNewLine();
-          // bluetooth.printLeftRight("LEFT", "RIGHT", 2);
-          // bluetooth.printCustom("Body left", 1, 0);
-          // bluetooth.printCustom("Body right", 0, 2);
-          // bluetooth.printNewLine();
-          // bluetooth.printImage(fileName);
+          bluetooth.printNewLine();
+          bluetooth.printCustom(" : 0200187454", 1, 0);
+          bluetooth.printCustom(
+              "KÖY ADI".padRight(12) + ': ${data['village_name']}', 1, 0);
+          bluetooth.printCustom(
+              "GRUP SIRA NO".padRight(12) + ': ${data['order_no'].toString()}',
+              1,
+              0);
+          bluetooth.printCustom(
+              "AD SOYAD".padRight(12) + ': ${data['name_surname']}', 1, 0);
+          bluetooth.printCustom(
+              "KANTAR".padRight(12) + ': ${data['weigher'].toString()}', 1, 0);
+          bluetooth.printCustom(
+              "TARİH".padRight(12) + ': ${data['date']}', 1, 0);
+          bluetooth.printCustom(
+              "MİKTAR".padRight(12) + ': ${data['quantity'].toString()}', 1, 0);
+          bluetooth.printCustom(
+              "SOKUM MAKİNA".padRight(12) + ': ${data['machine'].toString()}',
+              1,
+              0);
+          bluetooth.printCustom('Bu kart Yukarıdaki Tarihten', 1, 0);
+          bluetooth.printCustom('İtibaren 3 Gün Geçerlidir:', 1, 0);
+          bluetooth.printNewLine();
           bluetooth.printImageBytes(bytes);
           bluetooth.printNewLine();
-          // bluetooth.printCustom("KONYA ŞEKER FAB.", 2, 1);
-          // bluetooth.printNewLine();
-          // bluetooth.paperCut();
+          bluetooth.printNewLine();
         }
       });
     });
@@ -272,23 +282,34 @@ class _MyAppState extends State<MyApp> {
     return file.existsSync();
   }
 
-  // Future<void> generateBarcode(
-  //     Barcode bc, String data, double? width, double? height) async {
-  //   fileName = '$dir/test.svg';
-  //   print('FileName: $fileName');
-
-  //   final svg = bc.toSvg(data, width: width ?? 200, height: height ?? 80);
-  //   File file = await File(fileName).writeAsString(svg);
-  //   print('file exists: ' + test(file).toString());
-  // }
+  Future<File> get _localFile async {
+    final path = (await getApplicationDocumentsDirectory()).path;
+    print('-------------------- local file path: ' + path);
+    return File('$path/test.png');
+  }
 
   Future<Uint8List> generateBarcodeImage(
       Barcode bc, String data, double? width, double? height) async {
-    final image = im.Image(200, 80);
+    final image = im.Image(320, 100);
     im.fill(image, im.getColor(255, 255, 255));
     drawBarcode(image, bc, data, font: im.arial_24);
-    final bytes = image.getBytes();
-    return bytes;
+
+    final file = await _localFile;
+    file.writeAsBytesSync(im.encodePng(image)); // save image
+    final imageBytes = await loadImage(); // get image bytes from dir
+
+    return imageBytes;
+  }
+
+  Future<Uint8List> loadImage() async {
+    try {
+      final file = await _localFile;
+      final imageBytes = await file.readAsBytes();
+      return imageBytes;
+    } catch (e) {
+      print(e);
+      throw e;
+    }
   }
 
   Future show(
